@@ -234,22 +234,32 @@ const App = () => {
           });
       }
 
-      // Interior Simulation (Simulate wear if interior image present)
+      // Interior Wear Analysis via Gemini Vision (backend)
       const interiorImage = analyzedImages.find(img => img.angle === "interior");
       if (interiorImage) {
-          // Random simulation for now (Good/Moderate)
-          const isWorn = Math.random() > 0.5;
-          if (isWorn) {
-              const wearPenalty = -8000;
-              adjustments.push({
-                  label: "Interior Wear (Moderate)",
-                  category: "interior",
-                  scoreDelta: -5,
-                  valueDelta: wearPenalty
+          try {
+              const interiorRes = await fetch(`${API_BASE}/api/interior`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                      filename: interiorImage.imageId || interiorImage.uploadedFilename,
+                      basePrice: modelBase
+                  })
               });
+              if (interiorRes.ok) {
+                  const data = await interiorRes.json();
+                  adjustments.push({
+                      label: `Interior: ${data.condition}`,
+                      category: "interior",
+                      scoreDelta: data.scoreDelta,
+                      valueDelta: data.valueDelta
+                  });
+                  interiorImage.interiorCondition = data.condition;
+              } else {
+                  interiorImage.interiorCondition = "moderate";
+              }
+          } catch (err) {
               interiorImage.interiorCondition = "moderate";
-          } else {
-              interiorImage.interiorCondition = "good";
           }
       }
 
