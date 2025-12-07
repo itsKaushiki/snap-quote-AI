@@ -151,8 +151,10 @@ const App = () => {
       setError(null);
       setIsAnalyzing(true);
       
-      // 1. Run detection on all uploaded images
-      const imagesToProcess = Object.entries(captures).filter(([k, v]) => v.uploadedFilename);
+      // 1. Run detection on all uploaded images EXCEPT interior (handled by Gemini Vision)
+      const imagesToProcess = Object.entries(captures).filter(
+        ([k, v]) => v.uploadedFilename && k !== 'interior'
+      );
       if (imagesToProcess.length === 0) {
         throw new Error("No images uploaded to analyze");
       }
@@ -186,8 +188,23 @@ const App = () => {
           imageUrl: capture.url,
           heatmapUrl: null, // No heatmaps in this backend
           detections: currentDetections,
-          interiorCondition: angle === "interior" ? "good" : "none"
+          interiorCondition: "none"
         });
+      }
+
+      // Track interior capture separately (no YOLO detect for it)
+      const interiorCapture = captures.interior?.uploadedFilename
+        ? {
+            imageId: captures.interior.uploadedFilename,
+            angle: "interior",
+            imageUrl: captures.interior.url,
+            heatmapUrl: null,
+            detections: [],
+            interiorCondition: "pending"
+          }
+        : null;
+      if (interiorCapture) {
+        analyzedImages.push(interiorCapture);
       }
 
       // 2. Estimate Cost
@@ -242,7 +259,7 @@ const App = () => {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
-                      filename: interiorImage.imageId || interiorImage.uploadedFilename,
+                      filename: interiorImage.imageId,
                       basePrice: modelBase
                   })
               });
@@ -703,14 +720,16 @@ const DamageAndValuationSide = ({
                         <div className="heatmap-placeholder">No Image</div>
                     )
                   )}
-                  <div className="detection-chips">
-                    {img.detections.length === 0 && <span className="chip">No exterior damage</span>}
-                    {img.detections.map((d, i) => (
-                      <span key={i} className="chip-strong">
-                        {d.part}
-                      </span>
-                    ))}
-                  </div>
+                  {img.angle !== "interior" && (
+                    <div className="detection-chips">
+                      {img.detections.length === 0 && <span className="chip">No exterior damage</span>}
+                      {img.detections.map((d, i) => (
+                        <span key={i} className="chip-strong">
+                          {d.part}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
